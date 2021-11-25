@@ -155,7 +155,7 @@ def train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device
     
     # Training loop with validation after each epoch. Save the best model, and remember to use the lr scheduler.
     model.to(device)
-    
+
     train_accuracies = []
     train_losses = []
     val_accuracies = []
@@ -168,7 +168,7 @@ def train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device
         ac_list = []
         batch_sizes = []
         for x, y in train_dataloader: 
-            x = x.reshape(x.shape[0], -1)
+            #sx = x.reshape(x.shape[0], -1)
             x = x.to(device)
             y = y.to(device)
             
@@ -202,7 +202,7 @@ def train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device
         if val_ac > best_ac:
             best_model = deepcopy(model)
             best_ac = val_ac
-    
+    torch.save(best_model, checkpoint_name)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -231,14 +231,15 @@ def evaluate_model(model, data_loader, device, flag=False):
     ac_list = []
     loss_ep = []
     batch_sizes = []
+    model.eval()
     with torch.no_grad():
         for x, y in data_loader:
-            x = x.reshape(x.shape[0], -1)
+            #x = x.reshape(x.shape[0], -1)
             x = x.to(device)
             y = y.to(device)
             
             pred = model(x)
-            ac_list.append(accuracy_fun(pred,y))
+            ac_list.append(accuracy_fun(pred,y).cpu())
             
             loss = criterion(pred, y)
             loss_ep.append(loss.item())
@@ -277,18 +278,38 @@ def test_model(model, batch_size, data_dir, device, seed):
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    model_name = str(model).split("(")[0]
+    if model_name == "VGG":
+        batch = str(model).split("(1): ")[1].split("(")[0]
+        if batch == "BatchNorm2d":
+    	    model_name = "VGG_bn"
+    elif model_name == "ResNet":
+        if len((str(model))) == 8147:
+            model_name = "ResNet34"
+        else:
+            model_name = "ResNet18"
+    elif model_name == "Sequential":
+        model_name = "Clean"
     set_seed(seed)
     test_results = {}
-    test_dataset_1 = get_test_set(data_dir, augmentation = gaussian_noise_transform)
-    test_dataloader_1 = DataLoader(dataset=test_dataset_1, batch_size=batch_size, shuffle=False, drop_last=False,
-                                 collate_fn=collate_fn)
-    test_ac_1 = evaluate_model(model, test_dataloader_1, device)
-    
-    test_dataset_2 = get_test_set(data_dir, augmentation = None)
-    test_dataloader_2 = DataLoader(dataset=test_dataset_2, batch_size=batch_size, shuffle=False, drop_last=False,
-                                 collate_fn=collate_fn)
-    test_ac_2 = evaluate_model(model, test_dataloader_2, device)
-    print(test_ac_1, test_ac_2)
+    augmentation_list = [gaussian_noise_transform, gaussian_blur_transform, contrast_transform, jpeg_transform]
+    aug_list_name = ["gaussian_noise_transform", "gaussian_blur_transform", "contrast_transform", "jpeg_transform"]
+    it = 0
+    for augmentation in augmentation_list:
+        for sev in range(5):
+            test_dataset = get_test_set(data_dir, augmentation = augmentation(sev+1))
+            test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+            test_ac = evaluate_model(model, test_dataloader, device)
+            test_results[aug_list_name[it]+" "+str(sev+1)] = test_ac
+            print(aug_list_name[it]+" "+str(sev+1), test_ac)
+        it += 1
+    test_dataset = get_test_set(data_dir)
+    test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+    test_ac = evaluate_model(model, test_dataloader, device)
+    test_results["clean"] = test_ac
+    print("None ", test_ac)
+    with open(model_name+'_results.json', 'w') as fp:
+        json.dump(test_results, fp)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -319,11 +340,13 @@ def main(model_name, lr, batch_size, epochs, data_dir, seed):
     # PUT YOUR CODE HERE  #
     #######################
     device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+    print(device)
     set_seed(seed)
     
-    checkpoint_name = "~/uvadlc_practicals_2021/assignment2/part1/Checkpoints/"
+    checkpoint_name = "./"+model_name+".ckpt"
     model = get_model(model_name)
-    train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device)
+    best_model = train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device)
+    test_model(best_model, batch_size, data_dir, device, seed)
     pass
     #######################
     # END OF YOUR CODE    #
