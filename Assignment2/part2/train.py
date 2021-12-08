@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 
 from dataset import TextDataset, text_collate_fn
 from model import TextGenerationModel
+import matplotlib.pyplot as plt
 
 
 def set_seed(seed):
@@ -70,6 +71,22 @@ def accuracy_fun(predictions, targets):
     #######################
     
     return accuracy
+
+def plot_results(accuracy, loss, args):
+
+    fig = plt.figure(figsize=(8, 6), dpi=70)
+    plt.xlabel('Number of Epochs', fontsize=12)
+    plt.ylabel('Train Accuracy', fontsize=12)
+    plt.plot(accuracy, label="Training_Accuracy")
+    plt.legend()
+    plt.savefig('Train_ac_'+(str(args.txt_file).split("/")[1]).split(".")[0]+'.png')
+    
+    fig = plt.figure(figsize=(8, 6), dpi=70)
+    plt.xlabel('Number of Epochs', fontsize=12)
+    plt.ylabel('Train Loss', fontsize=12)
+    plt.plot(loss, label="Training_Loss")
+    plt.legend()
+    plt.savefig('Train_Loss_'+(str(args.txt_file).split("/")[1]).split(".")[0]+'.png')
 
 
 def train(args):
@@ -119,8 +136,8 @@ def train(args):
     val_losses = []
     best_ac = -1
     
-    model.train()
     for epoch in range(args.num_epochs):
+        model.train()
         loss_ep = []
         ac_list = []
         batch_sizes = []
@@ -131,6 +148,7 @@ def train(args):
             y_one_hot = torch.nn.functional.one_hot(y, num_classes = args.vocabulary_size).float()
             
             pred = model(x)
+            #print(pred.shape, y_one_hot.shape)
             loss = criterion(pred.permute(0,2,1), y_one_hot.permute(0,2,1))
             loss_ep.append(loss.item())
             optimizer.zero_grad()
@@ -146,12 +164,26 @@ def train(args):
             train_ac = np.average(ac_list, weights=batch_sizes)
             train_loss = np.average(loss_ep, weights=batch_sizes)
                 
-        train_accuracies.append(ac_list)
+        train_accuracies.append(train_ac)
         train_losses.append(train_loss)
        
         print("[{}] Epoch: {}/{} Loss: {} Acc: {}".format("train", epoch+1, args.num_epochs, train_loss, train_ac))
+
+        samples = model.sample(batch_size=1, sample_length=args.sample_length, temperature=0)
+        print('Greedy Sampling             : ', dataset.convert_to_string(samples))
+
+        samples = model.sample(batch_size=1, sample_length=args.sample_length, temperature=0.5)
+        print('Random Sampling - temp = 0.5: ', dataset.convert_to_string(samples))
+
+        samples = model.sample(batch_size=1, sample_length=args.sample_length, temperature=1.0)
+        print('Random Sampling - temp = 1.0: ', dataset.convert_to_string(samples))
+
+        samples = model.sample(batch_size=1, sample_length=args.sample_length, temperature=2.0)
+        print('Random Sampling - temp = 2.0: ', dataset.convert_to_string(samples))
+
         print("-------------------------------------------------------------------------------------")
-    torch.save(model, "./lstm_model.ckpt")
+    torch.save(model, "./lstm_model_"+(str(args.txt_file).split("/")[1]).split(".")[0]+".ckpt")
+    plot_results(train_accuracies, train_losses, args)
     
     return model
     #######################
@@ -171,12 +203,12 @@ if __name__ == "__main__":
     # Training
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size to train with.')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for the optimizer.')
-    parser.add_argument('--num_epochs', type=int, default=1, help='Number of epochs to train for.')
+    parser.add_argument('--num_epochs', type=int, default=20, help='Number of epochs to train for.')
     parser.add_argument('--clip_grad_norm', type=float, default=5.0, help='Gradient clipping norm')
 
     # Additional arguments. Feel free to add more arguments
     parser.add_argument('--seed', type=int, default=0, help='Seed for pseudo-random number generator')
-
+    parser.add_argument('--sample_length', type=int, default=30, help='Sample length for printing process')
     args = parser.parse_args()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available, else use CPU
     train(args)

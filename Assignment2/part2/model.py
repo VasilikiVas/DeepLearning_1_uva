@@ -18,18 +18,13 @@ import math
 import torch
 import torch.nn as nn
 
-
-from datetime import datetime
-import argparse
-from tqdm.auto import tqdm
-import torch
-import numpy as np
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
+##REMOVE THE IMPORTS
 from dataset import TextDataset, text_collate_fn
 
+import argparse
 
+from torch.utils.data import DataLoader
+import numpy as np
 
 class LSTM(nn.Module):
     """
@@ -52,23 +47,23 @@ class LSTM(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        
-        self.W_gx = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim), requires_grad=True)
-        self.W_ix = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim), requires_grad=True)
-        self.W_fx = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim), requires_grad=True)
-        self.W_ox = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim), requires_grad=True)
-        
-        self.W_gh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim), requires_grad=True)
-        self.W_ih = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim), requires_grad=True)
-        self.W_fh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim), requires_grad=True)
-        self.W_oh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim), requires_grad=True)
-        self.W_ph = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim), requires_grad=True)
 
-        self.b_g = nn.Parameter(torch.zeros(1, self.hidden_dim), requires_grad=True)
-        self.b_i = nn.Parameter(torch.zeros(1, self.hidden_dim), requires_grad=True)
-        self.b_f = nn.Parameter(torch.zeros(1, self.hidden_dim), requires_grad=True)
-        self.b_o = nn.Parameter(torch.zeros(1, self.hidden_dim), requires_grad=True)
-        self.b_h = nn.Parameter(torch.zeros(1, self.hidden_dim), requires_grad=True)
+        self.W_gx = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim))
+        self.W_ix = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim))
+        self.W_fx = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim))
+        self.W_ox = nn.Parameter(torch.zeros(self.embed_dim, self.hidden_dim))
+        
+        self.W_gh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim))
+        self.W_ih = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim))
+        self.W_fh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim))
+        self.W_oh = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim))
+        self.W_ph = nn.Parameter(torch.zeros(self.hidden_dim, self.hidden_dim))
+
+        self.b_g = nn.Parameter(torch.zeros(1, self.hidden_dim))
+        self.b_i = nn.Parameter(torch.zeros(1, self.hidden_dim))
+        self.b_f = nn.Parameter(torch.zeros(1, self.hidden_dim))
+        self.b_o = nn.Parameter(torch.zeros(1, self.hidden_dim))
+        self.b_h = nn.Parameter(torch.zeros(1, self.hidden_dim))
 
         #######################
         # END OF YOUR CODE    #
@@ -91,11 +86,12 @@ class LSTM(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+
         desired_bound = 1 / math.sqrt(self.hidden_dim)
         for parameter in self.parameters():
             torch.nn.init.uniform_(parameter.data, -desired_bound, desired_bound)
         self.b_f.data += 1
-        
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -113,14 +109,15 @@ class LSTM(nn.Module):
         The output needs to span all time steps, (not just the last one),
         so the output shape is [input length, batch size, hidden dimension].
         """
-        
+        #
+        #
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available, else use CPU
         
+        device = self.W_fx.device
         input_len, batch_size, _ = embeds.shape
-        
+
         c_t = torch.zeros(batch_size, self.hidden_dim).to(device)
         h_t = torch.zeros(batch_size, self.hidden_dim).to(device)
 
@@ -131,39 +128,23 @@ class LSTM(nn.Module):
             i_t = torch.sigmoid(embed @ self.W_ix + h_t @ self.W_ih + self.b_i)
             f_t = torch.sigmoid(embed @ self.W_fx + h_t @ self.W_fh + self.b_f)
             o_t = torch.sigmoid(embed @ self.W_ox + h_t @ self.W_oh + self.b_o)
-            
-            h_prev = h_t.unsqueeze(0)
-            
             c_t = g_t * i_t + c_t * f_t
             h_t = torch.tanh(c_t) * o_t
-            
+
+            h_prev = h_t.unsqueeze(0)
+
             if it == 0:
                 h_total = h_prev.detach().clone()
-            else : 
+            else :
                 h_total = torch.cat((h_total, h_prev))
             it += 1
-        
-        #p_t = h_t @ self.W_ph + self.b_h
-        #y_t = nn.Softmax(dim=1)(p_t)
-        
-        return h_total 
+
+        return h_total
+
         #######################
         # END OF YOUR CODE    #
         #######################
 
-'''if __name__ == "__main__":
-    model = LSTM(1024, 256)
-    txt_file = "assets/book_EN_democracy_in_the_US.txt"
-    dataset = TextDataset(txt_file, 30)
-    data_loader = DataLoader(dataset, 128, 
-                             shuffle=True, drop_last=True, pin_memory=True,
-                             collate_fn=text_collate_fn)
-    
-    x, _ = next(iter(data_loader)) 
-    embeddings = nn.Embedding(12508, 256)
-    embed = embeddings(x)
-    model.forward(embed)'''
-    
 
 class TextGenerationModel(nn.Module):
     """
@@ -174,6 +155,7 @@ class TextGenerationModel(nn.Module):
     def __init__(self, args):
         """
         Initializing the components of the TextGenerationModel.
+
         Args:
             args.vocabulary_size: The size of the vocabulary.
             args.embedding_size: The size of the embedding.
@@ -187,6 +169,7 @@ class TextGenerationModel(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+
         self.lstm_hidden_dim = args.lstm_hidden_dim
         self.embedding_size = args.embedding_size
         self.vocabulary_size = args.vocabulary_size
@@ -194,6 +177,7 @@ class TextGenerationModel(nn.Module):
         self.embeddings = nn.Embedding(self.vocabulary_size, self.embedding_size)
         self.lstm = LSTM(self.lstm_hidden_dim, self.embedding_size)
         self.linear = nn.Linear(self.lstm_hidden_dim, self.vocabulary_size)
+
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -213,16 +197,18 @@ class TextGenerationModel(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+
         embed = self.embeddings(x)
         lstm_out = self.lstm(embed)
         out = self.linear(lstm_out)
         
         return out
+
         #######################
         # END OF YOUR CODE    #
         #######################
 
-    def sample(self, batch_size=4, sample_length=30, temperature=2.):
+    def sample(self, batch_size=4, sample_length=30, temperature=0.):
         """
         Sampling from the text generation model.
 
@@ -239,26 +225,23 @@ class TextGenerationModel(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        x = torch.zeros(sample_length, batch_size, dtype=int)    
-
+        device = self.lstm.W_fx.device
+        sampled_x = torch.zeros(sample_length, batch_size, dtype=int).to(device)
+        
         with torch.no_grad():
             for t in range(sample_length):
                 if t == 0:
-                    x[t, :] = torch.randint(low=0, high=self.vocabulary_size, size = (1, batch_size), dtype=int)
-                    #print(x.shape, " 0")
+                    sampled_x[t] = torch.randint(self.vocabulary_size, (1, batch_size))
                 else:
-                    p_t = self.forward(x[t-1, :].unsqueeze(0))
-                    p_t = p_t.squeeze(0)
-                    if int(temperature) == 0:
-                        x[t, :] = torch.argmax(p_t, dim=-1)
-                        #print(x.shape, " no_temp")
+                    p_t = self.forward(sampled_x[:t])
+                    if temperature == 0:
+                        sampled_x[t] = torch.argmax(p_t[t-1], dim=-1)
                     else:
-                        print(p_t.shape)
-                        x[t, :] = torch.softmax(p_t / temperature, dim=0)
-                        x[t, :] = torch.argmax(p_t, dim=-1)
-                        #print(x.shape, " temp")
-        return x
-        
+                        next_chars = p_t[t-1] / temperature
+                        p_w = torch.softmax(next_chars, dim=1)
+                        sampled_x[t] = torch.multinomial(p_w, num_samples=1).squeeze(1)
+        return sampled_x.squeeze_().tolist()
+
         #######################
         # END OF YOUR CODE    #
         #######################
