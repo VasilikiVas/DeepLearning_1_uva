@@ -162,8 +162,8 @@ def train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device
     val_losses = []
     best_ac = -1
     
-    model.train()
     for epoch in range(epochs):
+        model.train()
         loss_ep = []
         ac_list = []
         batch_sizes = []
@@ -182,8 +182,8 @@ def train_model(model, lr, batch_size, epochs, data_dir, checkpoint_name, device
             optimizer.step()
             
             batch_sizes.append(len(y))
-            with torch.no_grad():
-                train_loss = np.average(loss_ep, weights=batch_sizes)
+        with torch.no_grad():
+            train_loss = np.average(loss_ep, weights=batch_sizes)
                 
         scheduler.step()
         train_ac = evaluate_model(model, train_dataloader, device)
@@ -376,7 +376,7 @@ if __name__ == '__main__':
                         help='Minibatch size')
 
     # Other hyperparameters
-    parser.add_argument('--epochs', default=5, type=int,
+    parser.add_argument('--epochs', default=150, type=int,
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
