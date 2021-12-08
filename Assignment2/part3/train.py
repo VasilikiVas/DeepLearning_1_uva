@@ -28,6 +28,8 @@ from tqdm import tqdm
 
 from data import *
 from networks import *
+import torch.optim as optim
+import matplotlib.pyplot as plt
 
 
 def permute_indices(molecules: Batch) -> Batch:
@@ -83,7 +85,15 @@ def compute_loss(
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    if isinstance(model, MLP):
+        x = get_mlp_features(molecules)
+        pred = model(x).squeeze(1)
+    else:
+        x = get_node_features(molecules)
+        pred = model(x, molecules.edge_index, molecules.edge_attr, molecules.batch).squeeze(1)
 
+    y = get_labels(molecules)
+    loss = criterion(pred, y)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -116,7 +126,22 @@ def evaluate_model(
     #######################
     # PUT YOUR CODE HERE  #
     #######################
+    batch_sizes = []
+    loss_ep = []
 
+    model.eval()
+    with torch.no_grad():
+        for molecule in data_loader:
+            if permute: 
+                molecule = permute_indices(molecule)
+            loss = compute_loss(model, molecule, criterion)
+
+            loss_ep.append(loss.item())
+
+            y = get_labels(molecule)
+            batch_sizes.append(len(y))
+            
+    avg_loss = np.average(loss_ep, weights=batch_sizes)
     #######################
     # END OF YOUR CODE    #
     #######################
@@ -185,22 +210,64 @@ def train(
     #######################
 
     # TODO: Initialize loss module and optimizer
-    criterion = ...
-    optimizer = ...
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
+
     # TODO: Training loop including validation, using evaluate_model
     # TODO: Do optimization, we used adam with amsgrad. (many should work)
-    val_losses = ...
+
+    train_losses = []
+    val_losses = []
+    worst_loss = np.inf
+    
+    for epoch in range(epochs):
+        model.train()
+        loss_ep = []
+        batch_sizes = []
+        for molecule in train_dataloader:
+            loss = compute_loss(model, molecule, criterion)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        train_loss = evaluate_model(model, train_dataloader, criterion, permute=False)
+        train_losses.append(train_loss)
+        val_loss = evaluate_model(model, valid_dataloader, criterion, permute=False)
+        val_losses.append(val_loss)
+        
+        print("Epoch: {}/{} Train_Loss: {} Valid_Loss: {}".format(epoch+1, epochs, train_loss, val_loss))
+        print("-------------------------------------------------------------------------------------")
+    
+        if val_loss < worst_loss:
+            best_model = deepcopy(model)
+            best_loss = val_loss
+    
     # TODO: Test best model
-    test_loss = ...
+    test_loss = evaluate_model(model, test_dataloader, criterion, permute=False)
+    print("Test loss: ", test_loss)
     # TODO: Test best model against permuted indices
-    permuted_test_loss = ...
+    permuted_test_loss = evaluate_model(model, test_dataloader, criterion, permute=True)
+    print("Permuted test loss: ", permuted_test_loss)
     # TODO: Add any information you might want to save for plotting
-    logging_info = ...
+    logging_info = dict({"train_loss": train_losses, "valid_loss": val_losses})
 
     #######################
     # END OF YOUR CODE    #
     #######################
     return model, test_loss, permuted_test_loss, val_losses, logging_info
+
+def plot_results(list_valid, name, filename):
+    fig = plt.figure(figsize=(8, 6), dpi=70)
+    x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    plt.xlabel('Number of Epochs', fontsize=12)
+    default_x_ticks = range(len(x))
+    plt.ylabel(name, fontsize=12)
+    plt.plot(default_x_ticks, list_valid, label="Validation Set")
+    plt.xticks(default_x_ticks, x)
+    plt.legend()
+    plt.savefig("./"+str(filename)+'.jpeg')
+    plt.show()
 
 
 def main(**kwargs):
@@ -225,14 +292,15 @@ def main(**kwargs):
         )
     else:
         raise NotImplementedError("only mlp and gnn are possible models.")
-
+ 
     model.to(device)
     model, test_loss, permuted_test_loss, val_losses, logging_info = train(
         model, **kwargs
     )
 
     # plot the loss curve, etc. below.
-
+    plot_results(logging_info['valid_loss'], 'Loss', model.__class__.__name__)
+    torch.save(model, "./"+model.__class__.__name__+".ckpt")
 
 if __name__ == "__main__":
     # Command line arguments

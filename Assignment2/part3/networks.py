@@ -46,7 +46,22 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        super(MLP, self).__init__()
+        layers = []
+        self.n_hidden = n_hidden
+
+        for i in range(len(n_hidden)+1):
+            if i==0:
+                layers.append(nn.Linear(n_inputs, n_hidden[0]))
+                layers.append(nn.ReLU(inplace=True))
+            elif i == len(n_hidden):
+                layers.append(nn.Linear(n_hidden[i-1], n_outputs))
+            else:
+                layers.append(nn.Linear(n_hidden[i-1], n_hidden[i]))
+                layers.append(nn.ReLU(inplace=True))
+        self.layers = nn.ModuleList(layers)
+            
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -65,7 +80,11 @@ class MLP(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        
+        out = x
+        for l in self.layers:
+            out = l(out) 
+                
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -108,7 +127,21 @@ class GNN(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
-        pass
+        super().__init__()
+        
+        #self.emb_layer = nn.Embedding(num_embeddings=n_node_features, embedding_dim=n_hidden)
+        self.emb_layer = nn.Linear(n_node_features, n_hidden)
+        layers = [
+            nn.ReLU(inplace=True),
+            geom_nn.RGCNConv(in_channels = n_hidden,
+                            out_channels = n_hidden,
+                            num_relations = n_edge_features),
+            nn.ReLU(inplace=True),
+            geom_nn.MFConv(in_channels = n_hidden,
+                           out_channels = n_hidden)]* num_convolution_blocks
+        
+        self.layers = nn.ModuleList(layers)
+        self.head = MLP(n_inputs = n_hidden, n_hidden = [n_hidden], n_outputs = n_output)
         #######################
         # END OF YOUR CODE    #
         #######################
@@ -138,7 +171,20 @@ class GNN(nn.Module):
         #######################
         # PUT YOUR CODE HERE  #
         #######################
+        #out = x.argmax(dim=-1)
         
+        out = self.emb_layer(x)
+        for l in self.layers:
+            if isinstance(l, geom_nn.MessagePassing):
+                if isinstance(l, geom_nn.RGCNConv):
+                    out = l(out, edge_index, edge_attr.argmax(dim=-1))
+                else:
+                    out = l(out, edge_index)
+            else:
+                out = l(out)
+        out = geom_nn.global_add_pool(out, batch_idx)
+        for l in self.head.layers:
+            out = l(out) 
         #######################
         # END OF YOUR CODE    #
         #######################
