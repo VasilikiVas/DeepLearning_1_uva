@@ -122,4 +122,3 @@ This repository is for educational purposes as part of the UvA Deep Learning 1 c
 ---
 
 **Course:** Deep Learning 1 (UvA)  
-**Last Updated:** June 2026
